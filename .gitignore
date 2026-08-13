@@ -1,0 +1,36 @@
+# Design documents
+DESIGN.md
+backend/BACKEND_DESIGN.md
+frontend/FRONTEND_DESIGN.md
+
+# Environment variables
+.env
+*.env
+backend/.env
+frontend/.env
+.env.local
+.env.*.local
+!*.env.example
+
+# Node dependencies & frontend builds
+node_modules/
+frontend/node_modules/
+frontend/dist/
+frontend/dist-ssr/
+
+# Java & Maven build outputs
+target/
+backend/target/
+*.class
+
+# IDE & Editor configurations
+.idea/
+.vscode/
+*.iml
+backend/.classpath
+backend/.project
+backend/.settings/
+
+# OS files
+.DS_Store
+Thumbs.db
