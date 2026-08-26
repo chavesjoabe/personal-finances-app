@@ -93,6 +93,7 @@ public class MonthVisionService {
         BigDecimal totalExpense = calculateTotal(expenses);
         BigDecimal totalSavings = calculateTotal(savings);
         BigDecimal balance = totalIncome.subtract(totalExpense);
+        BigDecimal balanceMinusSavings = balance.subtract(totalSavings);
 
         PeriodSummaryResponse periodSummary = new PeriodSummaryResponse();
         periodSummary.period = period;
@@ -103,6 +104,7 @@ public class MonthVisionService {
         periodSummary.totalExpense = totalExpense;
         periodSummary.totalSavings = totalSavings;
         periodSummary.balance = balance;
+        periodSummary.balanceMinusSavings = balanceMinusSavings;
 
         return periodSummary;
     }

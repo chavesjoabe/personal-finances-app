@@ -63,6 +63,13 @@ export function PeriodSection({
     totalSavings = 0,
   } = periodData;
 
+  const periodBalance =
+    periodData.balance !== undefined ? periodData.balance : totalIncome - totalExpense;
+  const periodBalanceMinusSavings =
+    periodData.balanceMinusSavings !== undefined
+      ? periodData.balanceMinusSavings
+      : periodBalance - totalSavings;
+
   const isCoupleMode = members.length > 1;
 
   const knownMemberIds = new Set(members.map((m) => m._id));
@@ -101,7 +108,7 @@ export function PeriodSection({
             </Typography>
           </Box>
 
-          <Box sx={{ display: "flex", gap: 2.5, alignItems: "center", flexWrap: "wrap" }}>
+          <Box sx={{ display: "flex", gap: 2, alignItems: "center", flexWrap: "wrap" }}>
             <Typography variant="body2" color="text.secondary">
               Receitas: <strong style={{ color: "#2E7D32" }}>{formatCurrency(totalIncome)}</strong>
             </Typography>
@@ -110,6 +117,12 @@ export function PeriodSection({
             </Typography>
             <Typography variant="body2" color="text.secondary">
               Reservas: <strong style={{ color: "#1976D2" }}>{formatCurrency(totalSavings)}</strong>
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              Saldo: <strong style={{ color: periodBalance >= 0 ? "#2E7D32" : "#D32F2F" }}>{formatCurrency(periodBalance)}</strong>
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              Saldo - Reservas: <strong style={{ color: periodBalanceMinusSavings >= 0 ? "#1565C0" : "#D32F2F" }}>{formatCurrency(periodBalanceMinusSavings)}</strong>
             </Typography>
           </Box>
         </Box>
@@ -127,6 +140,7 @@ export function PeriodSection({
             const memberExpSum = memberExpenses.reduce((acc, curr) => acc + Number(curr.amount || 0), 0);
             const memberSavSum = memberSavings.reduce((acc, curr) => acc + Number(curr.amount || 0), 0);
             const memberBalance = memberIncSum - memberExpSum;
+            const memberBalanceMinusSavings = memberBalance - memberSavSum;
 
             return (
               <Grid item xs={12} md={isCoupleMode ? 6 : 12} key={member._id}>
@@ -151,6 +165,8 @@ export function PeriodSection({
                       pb: 1.5,
                       mb: 2,
                       borderBottom: `2px solid ${member.color || "#1976D2"}22`,
+                      flexWrap: "wrap",
+                      gap: 1,
                     }}
                   >
                     <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
@@ -167,16 +183,28 @@ export function PeriodSection({
                       </Typography>
                     </Box>
 
-                    <Chip
-                      label={`Saldo: ${formatCurrency(memberBalance)}`}
-                      size="small"
-                      sx={{
-                        backgroundColor: memberBalance >= 0 ? "#E8F5E9" : "#FFEBEE",
-                        color: memberBalance >= 0 ? "#2E7D32" : "#C62828",
-                        fontWeight: 700,
-                        fontSize: "0.8rem",
-                      }}
-                    />
+                    <Box sx={{ display: "flex", gap: 1, alignItems: "center", flexWrap: "wrap" }}>
+                      <Chip
+                        label={`Saldo: ${formatCurrency(memberBalance)}`}
+                        size="small"
+                        sx={{
+                          backgroundColor: memberBalance >= 0 ? "#E8F5E9" : "#FFEBEE",
+                          color: memberBalance >= 0 ? "#2E7D32" : "#C62828",
+                          fontWeight: 700,
+                          fontSize: "0.8rem",
+                        }}
+                      />
+                      <Chip
+                        label={`Saldo - Reservas: ${formatCurrency(memberBalanceMinusSavings)}`}
+                        size="small"
+                        sx={{
+                          backgroundColor: memberBalanceMinusSavings >= 0 ? "#E3F2FD" : "#FFF3E0",
+                          color: memberBalanceMinusSavings >= 0 ? "#1565C0" : "#C62828",
+                          fontWeight: 700,
+                          fontSize: "0.8rem",
+                        }}
+                      />
+                    </Box>
                   </Box>
 
                   {/* Member Section Totals Mini Bar */}
@@ -184,6 +212,8 @@ export function PeriodSection({
                     sx={{
                       display: "flex",
                       justifyContent: "space-between",
+                      flexWrap: "wrap",
+                      gap: 1,
                       mb: 2.5,
                       p: 1.5,
                       borderRadius: 2,
@@ -199,6 +229,9 @@ export function PeriodSection({
                     </Typography>
                     <Typography variant="caption" color="text.secondary">
                       Reserva: <strong style={{ color: "#1976D2" }}>{formatCurrency(memberSavSum)}</strong>
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      Saldo - Reservas: <strong style={{ color: memberBalanceMinusSavings >= 0 ? "#1565C0" : "#D32F2F" }}>{formatCurrency(memberBalanceMinusSavings)}</strong>
                     </Typography>
                   </Box>
 

@@ -99,8 +99,11 @@ class MonthVisionServiceTest {
         assertEquals(new BigDecimal("3500.00"), response.firstHalf.totalIncome);
         assertEquals(new BigDecimal("1200.00"), response.firstHalf.totalExpense);
         assertEquals(new BigDecimal("2300.00"), response.firstHalf.balance);
+        assertEquals(new BigDecimal("2300.00"), response.firstHalf.balanceMinusSavings);
 
         assertEquals(new BigDecimal("500.00"), response.secondHalf.totalSavings);
+        assertEquals(new BigDecimal("0"), response.secondHalf.balance);
+        assertEquals(new BigDecimal("-500.00"), response.secondHalf.balanceMinusSavings);
 
         assertEquals(new BigDecimal("3500.00"), response.summary.totalIncome);
         assertEquals(new BigDecimal("1200.00"), response.summary.totalExpenses);

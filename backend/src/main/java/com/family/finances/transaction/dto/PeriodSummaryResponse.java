@@ -16,4 +16,5 @@ public class PeriodSummaryResponse {
     public BigDecimal totalExpense = BigDecimal.ZERO;
     public BigDecimal totalSavings = BigDecimal.ZERO;
     public BigDecimal balance = BigDecimal.ZERO;
+    public BigDecimal balanceMinusSavings = BigDecimal.ZERO;
 }

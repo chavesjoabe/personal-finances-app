@@ -76,6 +76,7 @@ export interface PeriodSummaryResponse {
   totalExpense: number;
   totalSavings: number;
   balance: number;
+  balanceMinusSavings?: number;
 }
 
 export interface MonthVisionSummaryResponse {
