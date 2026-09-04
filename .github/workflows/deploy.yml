@@ -6,7 +6,32 @@ on:
       - main
 
 jobs:
-  deploy:
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: maven
+
+      - name: Grant execute permission for mvnw
+        run: chmod +x backend/mvnw
+
+      - name: Build backend application
+        working-directory: backend
+        run: |
+          ./mvnw clean package -DskipTests
+
+  tests:
+    name: Tests
+    needs: build
     runs-on: ubuntu-latest
 
     steps:
@@ -28,23 +53,62 @@ jobs:
         run: |
           ./mvnw test
 
-      - name: Build backend application
-        working-directory: backend
-        run: |
-          ./mvnw clean package -DskipTests
+  deploy-preparation:
+    name: Deploy preparation
+    needs: tests
+    runs-on: ubuntu-latest
 
+    steps:
       - name: Create .env file for deployment
-        working-directory: backend
+        env:
+          MONGODB_CONNECTION_STRING: ${{ secrets.MONGODB_CONNECTION_STRING }}
+          MONGODB_DATABASE: ${{ secrets.MONGODB_DATABASE }}
+          JWT_SECRET: ${{ secrets.JWT_SECRET }}
+          JWT_EXPIRATION_HOURS: ${{ secrets.JWT_EXPIRATION_HOURS }}
+          CORS_ORIGINS: ${{ secrets.CORS_ORIGINS }}
+          PORT: ${{ secrets.PORT }}
+          QUARKUS_HTTP_PORT: ${{ secrets.QUARKUS_HTTP_PORT }}
         run: |
           touch .env
-          [ -n "${{ secrets.MONGODB_CONNECTION_STRING }}" ] && echo "MONGODB_CONNECTION_STRING=${{ secrets.MONGODB_CONNECTION_STRING }}" >> .env
-          [ -n "${{ secrets.MONGODB_DATABASE }}" ] && echo "MONGODB_DATABASE=${{ secrets.MONGODB_DATABASE }}" >> .env
-          [ -n "${{ secrets.JWT_SECRET }}" ] && echo "JWT_SECRET=${{ secrets.JWT_SECRET }}" >> .env
-          [ -n "${{ secrets.JWT_EXPIRATION_HOURS }}" ] && echo "JWT_EXPIRATION_HOURS=${{ secrets.JWT_EXPIRATION_HOURS }}" >> .env
-          [ -n "${{ secrets.CORS_ORIGINS }}" ] && echo "CORS_ORIGINS=${{ secrets.CORS_ORIGINS }}" >> .env
-          [ -n "${{ secrets.PORT }}" ] && echo "PORT=${{ secrets.PORT }}" >> .env
-          [ -n "${{ secrets.QUARKUS_HTTP_PORT }}" ] && echo "QUARKUS_HTTP_PORT=${{ secrets.QUARKUS_HTTP_PORT }}" >> .env
+          if [ -n "$MONGODB_CONNECTION_STRING" ]; then echo "MONGODB_CONNECTION_STRING=$MONGODB_CONNECTION_STRING" >> .env; fi
+          if [ -n "$MONGODB_DATABASE" ]; then echo "MONGODB_DATABASE=$MONGODB_DATABASE" >> .env; fi
+          if [ -n "$JWT_SECRET" ]; then echo "JWT_SECRET=$JWT_SECRET" >> .env; fi
+          if [ -n "$JWT_EXPIRATION_HOURS" ]; then echo "JWT_EXPIRATION_HOURS=$JWT_EXPIRATION_HOURS" >> .env; fi
+          if [ -n "$CORS_ORIGINS" ]; then echo "CORS_ORIGINS=$CORS_ORIGINS" >> .env; fi
+          if [ -n "$PORT" ]; then echo "PORT=$PORT" >> .env; fi
+          if [ -n "$QUARKUS_HTTP_PORT" ]; then echo "QUARKUS_HTTP_PORT=$QUARKUS_HTTP_PORT" >> .env; fi
+          echo "Environment configuration prepared successfully."
 
+      - name: Verify SSH connection and stage environment to VPS
+        env:
+          EC2_HOST: ${{ secrets.EC2_HOST }}
+          EC2_USER: ${{ secrets.EC2_USER }}
+          EC2_KEY: ${{ secrets.EC2_KEY }}
+        run: |
+          echo "$EC2_KEY" > private_key.pem
+          chmod 600 private_key.pem
+
+          if ! ssh -o StrictHostKeyChecking=no -i private_key.pem $EC2_USER@$EC2_HOST "echo 'SSH connection successful'"; then
+            echo "Failed to establish SSH connection"
+            rm -f private_key.pem
+            exit 1
+          fi
+
+          if [ -s .env ]; then
+            echo "Syncing .env file to VPS staging location..."
+            scp -o StrictHostKeyChecking=no -i private_key.pem .env $EC2_USER@$EC2_HOST:/tmp/.env.personal-finances
+          else
+            echo "No custom environment variables provided; skipping .env sync."
+          fi
+
+          rm -f private_key.pem .env
+
+  deploy-on-vps:
+    name: Deploy on VPS
+    needs: deploy-preparation
+    runs-on: ubuntu-latest
+
+    steps:
       - name: Deploy to VPS via SSH
         env:
           EC2_HOST: ${{ secrets.EC2_HOST }}
@@ -57,11 +121,9 @@ jobs:
 
           if ! ssh -o StrictHostKeyChecking=no -i private_key.pem $EC2_USER@$EC2_HOST "echo 'SSH connection successful'"; then
             echo "Failed to establish SSH connection"
+            rm -f private_key.pem
             exit 1
           fi
-
-          # Sync .env to temporary location on VPS
-          scp -o StrictHostKeyChecking=no -i private_key.pem backend/.env $EC2_USER@$EC2_HOST:/tmp/.env.personal-finances || true
 
           ssh -o StrictHostKeyChecking=no -i private_key.pem $EC2_USER@$EC2_HOST << 'EOF'
             SERVICE_NAME="personal-finances-application"
@@ -191,3 +253,4 @@ jobs:
 
             echo "Deployment successful!"
           EOF
+          rm -f private_key.pem
