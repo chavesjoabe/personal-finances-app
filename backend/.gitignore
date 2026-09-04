@@ -8,9 +8,7 @@ target/
 *.class
 
 # Maven
-.mvn/
-mvnw
-mvnw.cmd
+# Wrapper files are tracked to allow ./mvnw in CI and on VPS
 
 # IDE & Editor files
 .idea/

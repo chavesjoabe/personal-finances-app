@@ -82,6 +82,10 @@ public class JwtAuthFilter implements ContainerRequestFilter {
         }
         return path.equals("api/auth/login") ||
                path.equals("api/auth/register") ||
+               path.equals("api/health") ||
+               path.startsWith("api/health/") ||
+               path.equals("health") ||
+               path.startsWith("health/") ||
                path.startsWith("q/openapi") ||
                path.startsWith("q/swagger-ui");
     }

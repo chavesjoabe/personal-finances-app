@@ -1,0 +1,192 @@
+name: Deploy backend application
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: maven
+
+      - name: Grant execute permission for mvnw
+        run: chmod +x backend/mvnw
+
+      - name: Create .env file
+        working-directory: backend
+        run: |
+          echo "MONGODB_CONNECTION_STRING=${{ secrets.MONGODB_CONNECTION_STRING }}" >> .env
+          echo "MONGODB_DATABASE=${{ secrets.MONGODB_DATABASE }}" >> .env
+          echo "JWT_SECRET=${{ secrets.JWT_SECRET }}" >> .env
+          echo "JWT_EXPIRATION_HOURS=${{ secrets.JWT_EXPIRATION_HOURS }}" >> .env
+          echo "CORS_ORIGINS=${{ secrets.CORS_ORIGINS }}" >> .env
+          echo "PORT=${{ secrets.PORT }}" >> .env
+          echo "QUARKUS_HTTP_PORT=${{ secrets.QUARKUS_HTTP_PORT }}" >> .env
+
+      - name: Build backend application
+        working-directory: backend
+        run: |
+          ./mvnw clean package -DskipTests
+
+      - name: Unit tests
+        working-directory: backend
+        run: |
+          ./mvnw test
+
+      - name: Deploy to VPS via SSH
+        env:
+          EC2_HOST: ${{ secrets.EC2_HOST }}
+          EC2_USER: ${{ secrets.EC2_USER }}
+          EC2_KEY: ${{ secrets.EC2_KEY }}
+          APP_DIR: ${{ secrets.APP_DIR }}
+        run: |
+          echo "$EC2_KEY" > private_key.pem
+          chmod 600 private_key.pem
+
+          if ! ssh -o StrictHostKeyChecking=no -i private_key.pem $EC2_USER@$EC2_HOST "echo 'SSH connection successful'"; then
+            echo "Failed to establish SSH connection"
+            exit 1
+          fi
+
+          # Sync .env to temporary location on VPS
+          scp -o StrictHostKeyChecking=no -i private_key.pem backend/.env $EC2_USER@$EC2_HOST:/tmp/.env.personal-finances || true
+
+          ssh -o StrictHostKeyChecking=no -i private_key.pem $EC2_USER@$EC2_HOST << 'EOF'
+            SERVICE_NAME="personal-finances-application"
+            SERVICE_FILE="/etc/systemd/system/${SERVICE_NAME}.service"
+            APP_DIR="/root/personal-finances-application"
+
+            # Check if service is currently running and stop it if active
+            if sudo systemctl is-active --quiet "$SERVICE_NAME"; then
+              echo "Service $SERVICE_NAME is currently running. Stopping service before update..."
+              sudo systemctl stop "$SERVICE_NAME"
+            elif [ -f "$SERVICE_FILE" ]; then
+              echo "Service $SERVICE_NAME exists but is not running."
+            else
+              echo "Service $SERVICE_NAME does not exist yet. It will be created after the build."
+            fi
+
+            # Locate repository directory on VPS
+            if [ -d ~/personal-finances-application ]; then
+              cd ~/personal-finances-application
+            elif [ -d /root/personal-finances-application/repo ]; then
+              cd /root/personal-finances-application/repo
+            elif [ -d /root/personal-finances-application/.git ]; then
+              cd /root/personal-finances-application
+            else
+              echo "Directory ~/personal-finances-application not found. Exiting.";
+              exit 1;
+            fi
+
+            echo "Pulling latest code..."
+            git pull origin main
+
+            echo "Entering backend directory..."
+            cd backend || {
+              echo "Directory backend not found. Exiting.";
+              exit 1;
+            }
+
+            # Update .env on VPS if transferred
+            if [ -f /tmp/.env.personal-finances ]; then
+              echo "Updating .env file on VPS..."
+              cp /tmp/.env.personal-finances .env
+              sudo mkdir -p "$APP_DIR"
+              sudo cp /tmp/.env.personal-finances "$APP_DIR/.env"
+              sudo chmod 600 "$APP_DIR/.env"
+              rm -f /tmp/.env.personal-finances
+            fi
+
+            echo "Building new JAR..."
+            chmod +x mvnw
+            ./mvnw clean package -DskipTests
+
+            echo "Deploying new JAR..."
+            sudo mkdir -p "$APP_DIR"
+            sudo rm -rf "$APP_DIR/${SERVICE_NAME}.jar"
+
+            if [ -f target/*-runner.jar ]; then
+              sudo cp target/*-runner.jar "$APP_DIR/${SERVICE_NAME}.jar"
+            else
+              sudo cp target/*.jar "$APP_DIR/${SERVICE_NAME}.jar"
+            fi
+            sudo chmod 755 "$APP_DIR/${SERVICE_NAME}.jar"
+
+            # If service file does not exist, create and enable it
+            if [ ! -f "$SERVICE_FILE" ]; then
+              echo "Creating systemd service file at $SERVICE_FILE..."
+              JAVA_PATH=$(which java || echo "/usr/bin/java")
+
+              sudo tee "$SERVICE_FILE" > /dev/null << SERVICE_EOF
+            [Unit]
+            Description=Personal Finances Backend Application
+            After=network.target
+            
+            [Service]
+            Type=simple
+            User=root
+            WorkingDirectory=$APP_DIR
+            EnvironmentFile=-$APP_DIR/.env
+            ExecStart=$JAVA_PATH -jar $APP_DIR/${SERVICE_NAME}.jar
+            Restart=always
+            RestartSec=5
+            SuccessExitStatus=143
+            
+            [Install]
+            WantedBy=multi-user.target
+            SERVICE_EOF
+
+              sudo chmod 644 "$SERVICE_FILE"
+              sudo systemctl daemon-reload
+              sudo systemctl enable "$SERVICE_NAME"
+              echo "Service $SERVICE_NAME created and enabled on boot."
+            fi
+
+            echo "Reloading systemd and restarting service..."
+            sudo systemctl daemon-reload
+            sudo systemctl restart "$SERVICE_NAME"
+
+            echo "Verifying service is running..."
+            sleep 3
+            if ! sudo systemctl is-active --quiet "$SERVICE_NAME"; then
+              echo "Service $SERVICE_NAME failed to start! Inspecting logs..."
+              sudo systemctl status "$SERVICE_NAME" --no-pager
+              sudo journalctl -u "$SERVICE_NAME" -n 50 --no-pager
+              exit 1
+            fi
+
+            echo "Verifying application health endpoint..."
+            HEALTH_OK=false
+            for i in {1..12}; do
+              if curl -fsSL http://localhost:${PORT:-8080}/api/health > /dev/null 2>&1; then
+                HEALTH_OK=true
+                break
+              fi
+              echo "Waiting for health endpoint to respond (attempt $i/12)..."
+              sleep 2
+            done
+
+            if [ "$HEALTH_OK" = true ]; then
+              echo -e "\nHealth check PASSED! Application is running successfully as a service."
+              curl -s http://localhost:${PORT:-8080}/api/health
+              echo ""
+            else
+              echo -e "\nHealth check FAILED! Checking service status logs..."
+              sudo systemctl status "$SERVICE_NAME" --no-pager
+              sudo journalctl -u "$SERVICE_NAME" -n 50 --no-pager
+              exit 1
+            fi
+
+            echo "Deployment successful!"
+          EOF
