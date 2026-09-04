@@ -55,6 +55,7 @@ jobs:
 
   deploy-preparation:
     name: Deploy preparation
+    environment: PROD
     needs: tests
     runs-on: ubuntu-latest
 
@@ -105,6 +106,7 @@ jobs:
 
   deploy-on-vps:
     name: Deploy on VPS
+    environment: PROD
     needs: deploy-preparation
     runs-on: ubuntu-latest
 
