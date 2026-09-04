@@ -142,20 +142,43 @@ jobs:
               echo "Service $SERVICE_NAME does not exist yet. It will be created after the build."
             fi
 
-            # Locate repository directory on VPS
-            if [ -d ~/personal-finances-application ]; then
-              cd ~/personal-finances-application
-            elif [ -d /root/personal-finances-application/repo ]; then
-              cd /root/personal-finances-application/repo
-            elif [ -d /root/personal-finances-application/.git ]; then
-              cd /root/personal-finances-application
-            else
-              echo "Directory ~/personal-finances-application not found. Exiting.";
-              exit 1;
+            # Ensure git is available
+            if ! command -v git &> /dev/null; then
+              echo "Git not found on VPS. Installing git..."
+              sudo apt-get update && sudo apt-get install -y git
             fi
 
-            echo "Pulling latest code..."
-            git pull origin main
+            # Locate repository directory on VPS, or clone if missing
+            REPO_DIR="$HOME/personal-finances-application"
+            if [ -d "$HOME/personal-finances-application/.git" ] || [ -d "$HOME/personal-finances-application" ]; then
+              REPO_DIR="$HOME/personal-finances-application"
+              cd "$REPO_DIR"
+              echo "Pulling latest code..."
+              git fetch origin main
+              git reset --hard origin/main
+            elif [ -d "$HOME/personal-finances-app/.git" ] || [ -d "$HOME/personal-finances-app" ]; then
+              REPO_DIR="$HOME/personal-finances-app"
+              cd "$REPO_DIR"
+              echo "Pulling latest code..."
+              git fetch origin main
+              git reset --hard origin/main
+            elif [ -d /root/personal-finances-application/repo ]; then
+              REPO_DIR="/root/personal-finances-application/repo"
+              cd "$REPO_DIR"
+              echo "Pulling latest code..."
+              git fetch origin main
+              git reset --hard origin/main
+            elif [ -d /root/personal-finances-application/.git ]; then
+              REPO_DIR="/root/personal-finances-application"
+              cd "$REPO_DIR"
+              echo "Pulling latest code..."
+              git fetch origin main
+              git reset --hard origin/main
+            else
+              echo "Repository not found on VPS. Cloning to $REPO_DIR..."
+              git clone https://github.com/chavesjoabe/personal-finances-app.git "$REPO_DIR"
+              cd "$REPO_DIR"
+            fi
 
             echo "Entering backend directory..."
             cd backend || {
@@ -171,6 +194,12 @@ jobs:
               sudo cp /tmp/.env.personal-finances "$APP_DIR/.env"
               sudo chmod 600 "$APP_DIR/.env"
               rm -f /tmp/.env.personal-finances
+            fi
+
+            # Ensure Java JDK 21 is available for Maven build and runtime
+            if ! command -v java &> /dev/null; then
+              echo "Java not found on VPS. Installing OpenJDK 21..."
+              sudo apt-get update && sudo apt-get install -y openjdk-21-jdk
             fi
 
             echo "Building new JAR..."
@@ -231,10 +260,19 @@ jobs:
               exit 1
             fi
 
-            echo "Verifying application health endpoint..."
+            TARGET_PORT=""
+            if [ -f "$APP_DIR/.env" ]; then
+              TARGET_PORT=$(grep -E '^PORT=' "$APP_DIR/.env" | cut -d '=' -f2- | tr -d '\r' || true)
+              if [ -z "$TARGET_PORT" ]; then
+                TARGET_PORT=$(grep -E '^QUARKUS_HTTP_PORT=' "$APP_DIR/.env" | cut -d '=' -f2- | tr -d '\r' || true)
+              fi
+            fi
+            TARGET_PORT="${TARGET_PORT:-8080}"
+
+            echo "Verifying application health endpoint on port $TARGET_PORT..."
             HEALTH_OK=false
             for i in {1..12}; do
-              if curl -fsSL http://localhost:${PORT:-8080}/api/health > /dev/null 2>&1; then
+              if curl -fsSL "http://localhost:${TARGET_PORT}/api/health" > /dev/null 2>&1; then
                 HEALTH_OK=true
                 break
               fi
@@ -244,7 +282,7 @@ jobs:
 
             if [ "$HEALTH_OK" = true ]; then
               echo -e "\nHealth check PASSED! Application is running successfully as a service."
-              curl -s http://localhost:${PORT:-8080}/api/health
+              curl -s "http://localhost:${TARGET_PORT}/api/health"
               echo ""
             else
               echo -e "\nHealth check FAILED! Checking service status logs..."
