@@ -23,26 +23,27 @@ jobs:
       - name: Grant execute permission for mvnw
         run: chmod +x backend/mvnw
 
-      - name: Create .env file
+      - name: Unit tests
         working-directory: backend
         run: |
-          echo "MONGODB_CONNECTION_STRING=${{ secrets.MONGODB_CONNECTION_STRING }}" >> .env
-          echo "MONGODB_DATABASE=${{ secrets.MONGODB_DATABASE }}" >> .env
-          echo "JWT_SECRET=${{ secrets.JWT_SECRET }}" >> .env
-          echo "JWT_EXPIRATION_HOURS=${{ secrets.JWT_EXPIRATION_HOURS }}" >> .env
-          echo "CORS_ORIGINS=${{ secrets.CORS_ORIGINS }}" >> .env
-          echo "PORT=${{ secrets.PORT }}" >> .env
-          echo "QUARKUS_HTTP_PORT=${{ secrets.QUARKUS_HTTP_PORT }}" >> .env
+          ./mvnw test
 
       - name: Build backend application
         working-directory: backend
         run: |
           ./mvnw clean package -DskipTests
 
-      - name: Unit tests
+      - name: Create .env file for deployment
         working-directory: backend
         run: |
-          ./mvnw test
+          touch .env
+          [ -n "${{ secrets.MONGODB_CONNECTION_STRING }}" ] && echo "MONGODB_CONNECTION_STRING=${{ secrets.MONGODB_CONNECTION_STRING }}" >> .env
+          [ -n "${{ secrets.MONGODB_DATABASE }}" ] && echo "MONGODB_DATABASE=${{ secrets.MONGODB_DATABASE }}" >> .env
+          [ -n "${{ secrets.JWT_SECRET }}" ] && echo "JWT_SECRET=${{ secrets.JWT_SECRET }}" >> .env
+          [ -n "${{ secrets.JWT_EXPIRATION_HOURS }}" ] && echo "JWT_EXPIRATION_HOURS=${{ secrets.JWT_EXPIRATION_HOURS }}" >> .env
+          [ -n "${{ secrets.CORS_ORIGINS }}" ] && echo "CORS_ORIGINS=${{ secrets.CORS_ORIGINS }}" >> .env
+          [ -n "${{ secrets.PORT }}" ] && echo "PORT=${{ secrets.PORT }}" >> .env
+          [ -n "${{ secrets.QUARKUS_HTTP_PORT }}" ] && echo "QUARKUS_HTTP_PORT=${{ secrets.QUARKUS_HTTP_PORT }}" >> .env
 
       - name: Deploy to VPS via SSH
         env:

@@ -131,6 +131,7 @@
                     <systemPropertyVariables>
                         <java.util.logging.manager>org.jboss.logmanager.LogManager</java.util.logging.manager>
                         <maven.home>${maven.home}</maven.home>
+                        <quarkus.http.port>8081</quarkus.http.port>
                     </systemPropertyVariables>
                 </configuration>
             </plugin>

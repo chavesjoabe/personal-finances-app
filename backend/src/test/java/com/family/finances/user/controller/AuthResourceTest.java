@@ -1,5 +1,7 @@
 package com.family.finances.user.controller;
 
+import com.family.finances.category.repository.CategoryRepository;
+import com.family.finances.member.repository.MemberRepository;
 import com.family.finances.user.dto.LoginRequest;
 import com.family.finances.user.dto.RegisterRequest;
 import com.family.finances.user.entity.User;
@@ -25,6 +27,12 @@ class AuthResourceTest {
 
     @InjectMock
     UserRepository userRepository;
+
+    @InjectMock
+    MemberRepository memberRepository;
+
+    @InjectMock
+    CategoryRepository categoryRepository;
 
     private User user;
 

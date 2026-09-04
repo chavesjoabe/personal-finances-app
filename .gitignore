@@ -5,12 +5,16 @@ frontend/FRONTEND_DESIGN.md
 
 # Environment variables
 .env
+.env*
 *.env
 backend/.env
+backend/.env*
 frontend/.env
+frontend/.env*
 .env.local
 .env.*.local
 !*.env.example
+*.bak
 
 # Node dependencies & frontend builds
 node_modules/
