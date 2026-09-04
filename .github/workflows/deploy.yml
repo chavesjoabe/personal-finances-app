@@ -222,24 +222,24 @@ jobs:
               echo "Creating systemd service file at $SERVICE_FILE..."
               JAVA_PATH=$(which java || echo "/usr/bin/java")
 
-              sudo tee "$SERVICE_FILE" > /dev/null << SERVICE_EOF
-            [Unit]
-            Description=Personal Finances Backend Application
-            After=network.target
-            
-            [Service]
-            Type=simple
-            User=root
-            WorkingDirectory=$APP_DIR
-            EnvironmentFile=-$APP_DIR/.env
-            ExecStart=$JAVA_PATH -jar $APP_DIR/${SERVICE_NAME}.jar
-            Restart=always
-            RestartSec=5
-            SuccessExitStatus=143
-            
-            [Install]
-            WantedBy=multi-user.target
-            SERVICE_EOF
+              {
+                echo "[Unit]"
+                echo "Description=Personal Finances Backend Application"
+                echo "After=network.target"
+                echo ""
+                echo "[Service]"
+                echo "Type=simple"
+                echo "User=root"
+                echo "WorkingDirectory=$APP_DIR"
+                echo "EnvironmentFile=-$APP_DIR/.env"
+                echo "ExecStart=$JAVA_PATH -jar $APP_DIR/${SERVICE_NAME}.jar"
+                echo "Restart=always"
+                echo "RestartSec=5"
+                echo "SuccessExitStatus=143"
+                echo ""
+                echo "[Install]"
+                echo "WantedBy=multi-user.target"
+              } | sudo tee "$SERVICE_FILE" > /dev/null
 
               sudo chmod 644 "$SERVICE_FILE"
               sudo systemctl daemon-reload
